@@ -2,21 +2,44 @@ const { google } = require('googleapis');
 const path = require('path');
 
 const SPREADSHEET_ID = process.env.GOOGLE_SPREADSHEET_ID;
-const KEY_PATH = path.resolve(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH || './google-credentials.json');
 
 let _sheets = null;
 
 /**
  * Inicializa o cliente autenticado do Google Sheets via Service Account.
+ *
+ * Estratégia de autenticação (em ordem de prioridade):
+ *   1. Variável de ambiente GOOGLE_SERVICE_ACCOUNT_KEY com o JSON completo
+ *      → usada no Railway e outros ambientes de nuvem
+ *   2. Arquivo em GOOGLE_SERVICE_ACCOUNT_KEY_PATH (padrão: ./google-credentials.json)
+ *      → usado localmente durante o desenvolvimento
  */
 async function getSheetsClient() {
   if (_sheets) return _sheets;
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile: KEY_PATH,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
+  let authOptions;
 
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+    // Nuvem: lê as credenciais direto da variável de ambiente
+    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    authOptions = {
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    };
+    console.log('[SHEETS] Autenticando via variável de ambiente GOOGLE_SERVICE_ACCOUNT_KEY');
+  } else {
+    // Local: lê as credenciais do arquivo JSON
+    const keyFile = path.resolve(
+      process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH || './google-credentials.json'
+    );
+    authOptions = {
+      keyFile,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    };
+    console.log(`[SHEETS] Autenticando via arquivo: ${keyFile}`);
+  }
+
+  const auth = new google.auth.GoogleAuth(authOptions);
   _sheets = google.sheets({ version: 'v4', auth });
   return _sheets;
 }
