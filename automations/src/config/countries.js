@@ -23,8 +23,9 @@ const COUNTRIES = {
     storeDomain: process.env.PUBLICA_STORE_DOMAIN_CL,
     apiToken: process.env.PUBLICA_API_TOKEN_CL,
     webhookSecret: process.env.PUBLICA_WEBHOOK_SECRET_CL,
-    // Mailchimp
-    mailchimpAudienceId: process.env.MAILCHIMP_AUDIENCE_ID_CL,
+    // Mailchimp — tags aplicadas na audience única (MAILCHIMP_AUDIENCE_ID)
+    mailchimpCountryTag: 'Chile',          // tag permanente de país
+    mailchimpCancelledTag: 'cancelados chile', // tag adicional ao cancelar
     // Google Sheets (aba)
     sheetsTabName: process.env.GOOGLE_SHEET_NAME_CL || 'Vendas Chile',
   },
@@ -38,8 +39,9 @@ const COUNTRIES = {
     storeDomain: process.env.PUBLICA_STORE_DOMAIN_PE,
     apiToken: process.env.PUBLICA_API_TOKEN_PE,
     webhookSecret: process.env.PUBLICA_WEBHOOK_SECRET_PE,
-    // Mailchimp
-    mailchimpAudienceId: process.env.MAILCHIMP_AUDIENCE_ID_PE,
+    // Mailchimp — tags aplicadas na audience única (MAILCHIMP_AUDIENCE_ID)
+    mailchimpCountryTag: 'Perú',           // tag permanente de país
+    mailchimpCancelledTag: 'cancelados perú', // tag adicional ao cancelar
     // Google Sheets (aba)
     sheetsTabName: process.env.GOOGLE_SHEET_NAME_PE || 'Vendas Peru',
   },

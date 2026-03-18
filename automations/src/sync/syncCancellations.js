@@ -72,7 +72,7 @@ async function syncCancelledOrders(country) {
     if (!email) continue;
 
     try {
-      await markAsInactive(email, country.mailchimpAudienceId);
+      await markAsInactive(email, country.mailchimpCountryTag, country.mailchimpCancelledTag);
     } catch (err) {
       console.error(`[SYNC/${country.code}] Erro ao marcar ${email} como inativo:`, err.message);
     }

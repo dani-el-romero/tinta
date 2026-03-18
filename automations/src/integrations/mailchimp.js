@@ -6,7 +6,10 @@ mailchimp.setConfig({
   server: process.env.MAILCHIMP_API_KEY?.split('-').pop(), // extrai o datacenter (ex: us1)
 });
 
-// Tags usadas em todas as audiences
+// Audience única compartilhada por todos os países
+const LIST_ID = process.env.MAILCHIMP_AUDIENCE_ID;
+
+// Tags de status — aplicadas exclusivamente (só uma ativa por vez)
 const TAGS = {
   ACTIVE: 'cliente-ativo',
   INACTIVE: 'cliente-inativo',
@@ -21,19 +24,22 @@ function subscriberHash(email) {
 }
 
 /**
- * Adiciona ou atualiza um contato em uma audience específica.
+ * Adiciona ou atualiza um contato na audience.
  *
- * @param {object} customer - { email, name, phone }
- * @param {'cliente-ativo'|'cliente-inativo'|'lead'} activeTag - Tag a aplicar
- * @param {string} audienceId - ID da audience do país (MAILCHIMP_AUDIENCE_ID_CL ou _PE)
+ * Estratégia de tags:
+ *   - Tags de status (TAGS.*) são mutuamente exclusivas: só a `statusTag` fica ativa.
+ *   - `countryTag` (ex: 'Chile', 'Perú') é permanente e nunca desativada.
+ *   - `extraActiveTags` são ativadas adicionalmente (ex: 'cancelados chile').
+ *
+ * @param {object} customer        - { email, name, phone }
+ * @param {string} statusTag       - 'cliente-ativo' | 'cliente-inativo' | 'lead'
+ * @param {string} countryTag      - Tag permanente de país (countries.mailchimpCountryTag)
+ * @param {string[]} extraActiveTags - Tags extras a ativar (ex: tag de cancelamento)
  */
-async function upsertContact(customer, activeTag, audienceId) {
+async function upsertContact(customer, statusTag, countryTag, extraActiveTags = []) {
   if (!customer.email) {
     console.warn('[MAILCHIMP] Contato sem e-mail, ignorando.');
     return;
-  }
-  if (!audienceId) {
-    throw new Error('audienceId não informado para upsertContact');
   }
 
   const hash = subscriberHash(customer.email);
@@ -41,7 +47,7 @@ async function upsertContact(customer, activeTag, audienceId) {
   const lastName = rest.join(' ');
 
   // Upsert do contato (cria ou atualiza sem reenviar e-mail de confirmação)
-  await mailchimp.lists.setListMember(audienceId, hash, {
+  await mailchimp.lists.setListMember(LIST_ID, hash, {
     email_address: customer.email.toLowerCase().trim(),
     status_if_new: 'subscribed',
     merge_fields: {
@@ -51,39 +57,46 @@ async function upsertContact(customer, activeTag, audienceId) {
     },
   });
 
-  // Define as tags: ativa a correta e remove as outras
-  const allTags = Object.values(TAGS);
-  const tagUpdates = allTags.map((tag) => ({
+  // Tags de status: exclusivas entre si (ex: ativa 'cliente-ativo', desativa as demais)
+  const statusTagUpdates = Object.values(TAGS).map((tag) => ({
     name: tag,
-    status: tag === activeTag ? 'active' : 'inactive',
+    status: tag === statusTag ? 'active' : 'inactive',
   }));
 
-  await mailchimp.lists.updateListMemberTags(audienceId, hash, {
-    tags: tagUpdates,
+  // Tags permanentes: país + extras (nunca desativadas por esta função)
+  const permanentTagUpdates = [countryTag, ...extraActiveTags].map((tag) => ({
+    name: tag,
+    status: 'active',
+  }));
+
+  await mailchimp.lists.updateListMemberTags(LIST_ID, hash, {
+    tags: [...statusTagUpdates, ...permanentTagUpdates],
   });
 
-  console.log(`[MAILCHIMP] ${customer.email} → audience: ${audienceId} | tag: ${activeTag}`);
+  console.log(`[MAILCHIMP] ${customer.email} → status: ${statusTag} | país: ${countryTag}${extraActiveTags.length ? ` | extras: ${extraActiveTags.join(', ')}` : ''}`);
 }
 
 /**
- * Marca um contato como inativo/cancelado em uma audience.
+ * Marca um contato como cancelado/inativo.
+ * Aplica 'cliente-inativo' + a tag de cancelamento específica do país.
  *
  * @param {string} email
- * @param {string} audienceId
+ * @param {string} countryTag      - Ex: 'Chile' ou 'Perú'
+ * @param {string} cancelledTag    - Ex: 'cancelados chile' ou 'cancelados perú'
  */
-async function markAsInactive(email, audienceId) {
+async function markAsInactive(email, countryTag, cancelledTag) {
   const customer = { email, name: '', phone: '' };
-  await upsertContact(customer, TAGS.INACTIVE, audienceId);
+  await upsertContact(customer, TAGS.INACTIVE, countryTag, [cancelledTag]);
 }
 
 /**
- * Adiciona um lead (sem compra ainda) em uma audience.
+ * Adiciona um lead (sem compra ainda).
  *
  * @param {object} customer
- * @param {string} audienceId
+ * @param {string} countryTag - Ex: 'Chile' ou 'Perú'
  */
-async function addLead(customer, audienceId) {
-  await upsertContact(customer, TAGS.LEAD, audienceId);
+async function addLead(customer, countryTag) {
+  await upsertContact(customer, TAGS.LEAD, countryTag);
 }
 
 module.exports = { upsertContact, markAsInactive, addLead, TAGS };

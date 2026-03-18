@@ -77,7 +77,7 @@ async function syncCountry(country) {
 
   console.log(`\n${'='.repeat(50)}`);
   console.log(`SYNC: ${country.name} (${country.code})`);
-  console.log(`  Mailchimp audience: ${country.mailchimpAudienceId}`);
+  console.log(`  Mailchimp tags: ${country.mailchimpCountryTag} / ${country.mailchimpCancelledTag}`);
   console.log(`  Sheets tab: ${country.sheetsTabName}`);
   console.log('='.repeat(50));
 
@@ -102,7 +102,7 @@ async function syncCountry(country) {
       };
 
       // Mailchimp
-      await upsertContact(customer, TAGS.ACTIVE, country.mailchimpAudienceId);
+      await upsertContact(customer, TAGS.ACTIVE, country.mailchimpCountryTag);
       mailchimpOk++;
 
       // Google Sheets
@@ -148,7 +148,7 @@ async function syncCountry(country) {
       const email = order.user?.email;
       if (!email) continue;
 
-      await markAsInactive(email, country.mailchimpAudienceId);
+      await markAsInactive(email, country.mailchimpCountryTag, country.mailchimpCancelledTag);
       inactiveOk++;
       await sleep(150);
     } catch (err) {

@@ -68,7 +68,7 @@ async function handleSaleEvent(payload, subtype, country) {
 
   // Executa as integrações em paralelo para ganhar velocidade
   const results = await Promise.allSettled([
-    upsertContact(customer, 'cliente-ativo', country.mailchimpAudienceId),
+    upsertContact(customer, 'cliente-ativo', country.mailchimpCountryTag),
     appendSaleRow(customer, sale, country.sheetsTabName),
     // Mensagem de boas-vindas apenas na primeira compra
     shouldSendWelcome(subtype, payload)
