@@ -49,7 +49,10 @@ async function fetchAllUsers(publApi, query = null) {
     if (query) params.query = query;
 
     const res = await publApi.get('/dashboard/users', { params });
-    const users = res.data?.data || [];
+    // A API retorna um objeto paginador em `data`, com os usuários em `data.data`
+    // Suporta os dois formatos: array direto ou { data: [...], current_page: ... }
+    const raw = res.data?.data;
+    const users = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
     all.push(...users);
     console.log(`  Página ${page}: ${users.length} usuários`);
 
@@ -82,7 +85,8 @@ async function fetchAllApprovedOrders(publApi) {
       },
     });
 
-    const orders = res.data?.data || [];
+    const raw = res.data?.data;
+    const orders = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
     all.push(...orders);
     console.log(`  Página ${page}: ${orders.length} pedidos`);
 
