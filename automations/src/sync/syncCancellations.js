@@ -7,7 +7,7 @@ const { getAllCountries } = require('../config/countries');
  */
 function createPubliApi(country) {
   return axios.create({
-    baseURL: `https://${country.storeDomain}/api/v3`,
+    baseURL: `https://${country.storeDomain}/integration-api/v1`,
     headers: { 'X-User-Token': country.apiToken },
   });
 }
