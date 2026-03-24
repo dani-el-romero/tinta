@@ -50,18 +50,16 @@ async function fetchAllUsers(publApi, query = null) {
 
     const res = await publApi.get('/dashboard/users', { params });
 
-    // Log diagnóstico da primeira página para depuração
-    if (page === 1) {
-      console.log('[DEBUG] Estrutura da resposta /dashboard/users:');
-      console.log(JSON.stringify(res.data, null, 2).slice(0, 800));
-    }
+    // Estrutura real da resposta: { CODE, data: { paginator: { current_page, data: [...] } } }
+    const paginator = res.data?.data?.paginator;
+    const pageUsers = Array.isArray(paginator?.data) ? paginator.data : [];
 
-    const raw = res.data?.data;
-    const users = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
-    all.push(...users);
-    console.log(`  Página ${page}: ${users.length} usuários`);
+    // Mantém apenas usuários com pelo menos um plano associado
+    const withPlan = pageUsers.filter((u) => Array.isArray(u.user_plans) && u.user_plans.length > 0);
+    all.push(...withPlan);
+    console.log(`  Página ${page}: ${pageUsers.length} usuários (${withPlan.length} com plano)`);
 
-    if (users.length < 500) break;
+    if (pageUsers.length < 500) break;
     page++;
   }
 

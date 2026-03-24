@@ -19,16 +19,27 @@ async function getSheetsClient() {
 
   let authOptions;
 
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-    // Nuvem: lê as credenciais direto da variável de ambiente
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+  const envKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  let credentials = null;
+
+  if (envKey) {
+    try {
+      credentials = JSON.parse(envKey);
+      if (!credentials?.type) credentials = null; // JSON válido mas não é uma service account
+    } catch {
+      credentials = null;
+    }
+  }
+
+  if (credentials) {
+    // Nuvem: JSON completo da service account na variável de ambiente
     authOptions = {
       credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     };
     console.log('[SHEETS] Autenticando via variável de ambiente GOOGLE_SERVICE_ACCOUNT_KEY');
   } else {
-    // Local: lê as credenciais do arquivo JSON
+    // Local: arquivo JSON no disco (fallback quando a env var está ausente ou inválida)
     const keyFile = path.resolve(
       process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH || './google-credentials.json'
     );
