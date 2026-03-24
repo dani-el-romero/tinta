@@ -49,8 +49,13 @@ async function fetchAllUsers(publApi, query = null) {
     if (query) params.query = query;
 
     const res = await publApi.get('/dashboard/users', { params });
-    // A API retorna um objeto paginador em `data`, com os usuários em `data.data`
-    // Suporta os dois formatos: array direto ou { data: [...], current_page: ... }
+
+    // Log diagnóstico da primeira página para depuração
+    if (page === 1) {
+      console.log('[DEBUG] Estrutura da resposta /dashboard/users:');
+      console.log(JSON.stringify(res.data, null, 2).slice(0, 800));
+    }
+
     const raw = res.data?.data;
     const users = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
     all.push(...users);
