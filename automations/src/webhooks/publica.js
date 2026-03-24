@@ -26,6 +26,15 @@ function makeWebhookHandler(countryCode) {
   const country = getCountry(countryCode);
 
   return async function handleWebhook(req, res) {
+    // ----------------------------------------------------------------
+    // LOG TEMPORÁRIO — remover após identificar o formato do payload
+    // ----------------------------------------------------------------
+    console.log(`[DEBUG/${countryCode}] ===== REQUISIÇÃO RECEBIDA =====`);
+    console.log(`[DEBUG/${countryCode}] Headers:`, JSON.stringify(req.headers, null, 2));
+    console.log(`[DEBUG/${countryCode}] Body:`, JSON.stringify(req.body, null, 2));
+    console.log(`[DEBUG/${countryCode}] ================================`);
+    // ----------------------------------------------------------------
+
     // Responde 200 imediatamente para evitar reenvios desnecessários
     res.sendStatus(200);
 
