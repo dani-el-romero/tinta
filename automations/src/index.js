@@ -22,7 +22,21 @@ app.get('/', (req, res) => {
 app.post('/webhooks/publica/cl', makeWebhookHandler('CL'));
 app.post('/webhooks/publica/pe', makeWebhookHandler('PE'));
 
-// Sync diário de cancelamentos para todos os países (toda meia-noite)
+// ----------------------------------------------------------------
+// DIAGNÓSTICO — captura qualquer POST em /webhooks/* que não bateu
+// nas rotas acima. Ajuda a identificar URL errada no monitor.publica.la.
+// Remover após confirmar que os webhooks chegam no caminho correto.
+// ----------------------------------------------------------------
+app.post('/webhooks/*', (req, res) => {
+  console.warn('[DIAGNÓSTICO] POST recebido em rota não registrada:', req.path);
+  console.warn('[DIAGNÓSTICO] Headers:', JSON.stringify(req.headers, null, 2));
+  console.warn('[DIAGNÓSTICO] Body:', JSON.stringify(req.body, null, 2));
+  res.sendStatus(200);
+});
+
+// Sync diário de cancelamentos — DESABILITADO temporariamente
+// Para reativar: remova o comentário do bloco abaixo
+/*
 cron.schedule('0 0 * * *', async () => {
   console.log('[CRON] Iniciando sync de cancelamentos para todos os países...');
   for (const country of getAllCountries()) {
@@ -35,6 +49,7 @@ cron.schedule('0 0 * * *', async () => {
     }
   }
 });
+*/
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
