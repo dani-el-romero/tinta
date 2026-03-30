@@ -26,38 +26,131 @@ function makeWebhookHandler(countryCode) {
   const country = getCountry(countryCode);
 
   return async function handleWebhook(req, res) {
-    // ----------------------------------------------------------------
-    // LOG TEMPORÁRIO — remover após identificar o formato do payload
-    // ----------------------------------------------------------------
-    console.log(`[DEBUG/${countryCode}] ===== REQUISIÇÃO RECEBIDA =====`);
-    console.log(`[DEBUG/${countryCode}] Headers:`, JSON.stringify(req.headers, null, 2));
-    console.log(`[DEBUG/${countryCode}] Body:`, JSON.stringify(req.body, null, 2));
-    console.log(`[DEBUG/${countryCode}] ================================`);
-    // ----------------------------------------------------------------
-
     // Responde 200 imediatamente para evitar reenvios desnecessários
     res.sendStatus(200);
 
+    const body = req.body;
+
     try {
-      const rawToken = req.body?.json?.token;
-      if (!rawToken) {
-        console.warn(`[WEBHOOK/${countryCode}] Payload sem token recebido:`, JSON.stringify(req.body));
+      // ------------------------------------------------------------------
+      // FORMATO 1 — monitor.publica.la
+      // JSON direto com campo "event" no body (sem wrapper JWT).
+      // ------------------------------------------------------------------
+      if (body?.event === 'subscription.created') {
+        console.log(`[WEBHOOK/${countryCode}] subscription.created (monitor.publica.la)`);
+        await handleMonitorEvent(body, country);
         return;
       }
 
-      const decoded = verifyWebhookToken(rawToken, country.webhookSecret);
-      const { event_type, event_subtype, payload } = decoded;
-
-      console.log(`[WEBHOOK/${countryCode}] Evento recebido: ${event_type}/${event_subtype}`);
-
-      if (event_type === 'sale') {
-        await handleSaleEvent(payload, event_subtype, country);
-      } else {
-        console.log(`[WEBHOOK/${countryCode}] Evento não tratado: ${event_type}/${event_subtype}`);
+      // ------------------------------------------------------------------
+      // FORMATO 2 — publica.la clássico
+      // JWT assinado HS256 embrulhado em { json: { token: "..." } }.
+      // ------------------------------------------------------------------
+      const rawToken = body?.json?.token;
+      if (rawToken) {
+        const decoded = verifyWebhookToken(rawToken, country.webhookSecret);
+        const { event_type, event_subtype, payload } = decoded;
+        console.log(`[WEBHOOK/${countryCode}] Evento JWT: ${event_type}/${event_subtype}`);
+        if (event_type === 'sale') {
+          await handleSaleEvent(payload, event_subtype, country);
+        } else {
+          console.log(`[WEBHOOK/${countryCode}] Evento JWT não tratado: ${event_type}/${event_subtype}`);
+        }
+        return;
       }
+
+      // ------------------------------------------------------------------
+      // Formato desconhecido — loga o body completo para diagnóstico
+      // ------------------------------------------------------------------
+      console.warn(`[WEBHOOK/${countryCode}] Formato não reconhecido. Body:`, JSON.stringify(body));
     } catch (err) {
       console.error(`[WEBHOOK/${countryCode}] Erro ao processar evento:`, err.message);
     }
+  };
+}
+
+/**
+ * Processa um evento de nova assinatura vindo do monitor.publica.la.
+ *
+ * O monitor envia JSON direto (sem JWT), então a extração usa os campos
+ * do body diretamente. Se algum campo ficar em branco nos logs, ajuste
+ * os caminhos em extractCustomerFromMonitor / extractSaleFromMonitor.
+ *
+ * @param {object} body    - req.body completo
+ * @param {object} country - Config do país
+ */
+async function handleMonitorEvent(body, country) {
+  const customer = extractCustomerFromMonitor(body, country);
+  const sale = extractSaleFromMonitor(body, country);
+
+  console.log(`[MONITOR/${country.code}] Cliente: ${customer.email} | Produto: ${sale.productName} | ${sale.currency} ${sale.amount}`);
+
+  // subscription.created é sempre a primeira assinatura → envia boas-vindas
+  const results = await Promise.allSettled([
+    upsertContact(customer, 'cliente-ativo', country.mailchimpCountryTag),
+    appendSaleRow(customer, sale, country.sheetsTabName),
+    sendWelcomeMessage(customer, sale),
+  ]);
+
+  results.forEach((result, i) => {
+    const labels = ['Mailchimp', 'Google Sheets', 'WhatsApp'];
+    if (result.status === 'rejected') {
+      console.error(`[MONITOR/${country.code}] Erro em ${labels[i]}:`, result.reason?.message || result.reason);
+    } else {
+      console.log(`[MONITOR/${country.code}] ${labels[i]}: OK`);
+    }
+  });
+}
+
+/**
+ * Extrai dados do cliente do payload direto do monitor.publica.la.
+ *
+ * O monitor.publica.la pode aninhar os dados do usuário em campos como
+ * "user", "subscriber" ou "customer". Tentamos os três em ordem.
+ * Se os campos chegarem no nível raiz do body (flat), o fallback final
+ * busca body.email / body.name / body.phone diretamente.
+ */
+function extractCustomerFromMonitor(body, country) {
+  const user = body?.user || body?.subscriber || body?.customer || {};
+  const billing = body?.billing_information || body?.billing || {};
+
+  const email = user?.email || billing?.email || body?.email || '';
+  const name  = user?.name  || billing?.name  || body?.name  || '';
+  const phone = billing?.phone || user?.phone || body?.phone || null;
+
+  if (!email) {
+    console.warn('[MONITOR] E-mail não encontrado no payload. Campos disponíveis:', Object.keys(body).join(', '));
+  }
+
+  return {
+    email,
+    name,
+    phone: normalizePhone(phone, country.phonePrefix),
+  };
+}
+
+/**
+ * Extrai dados da venda do payload direto do monitor.publica.la.
+ */
+function extractSaleFromMonitor(body, country) {
+  const plan    = body?.plan    || body?.subscription || {};
+  const payment = body?.payment_details || body?.payment || {};
+
+  const productName  = plan?.name  || body?.plan_name  || body?.product_name || 'Plan';
+  const amountCents  = payment?.payout_amount_in_cents || body?.amount_cents  || 0;
+  const currency     = payment?.payout_currency_id     || body?.currency      || (country.code === 'CL' ? 'CLP' : 'PEN');
+
+  return {
+    productName,
+    amount: (amountCents / 100).toFixed(2),
+    currency,
+    gateway: payment?.gateway || body?.gateway || '',
+    method:  payment?.method  || body?.payment_method || '',
+    subtype: 'plan',
+    recurringCycle: null,
+    date: body?.created_at || new Date().toISOString(),
+    countryCode: country.code,
+    timezone: country.timezone,
   };
 }
 
