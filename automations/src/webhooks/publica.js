@@ -103,54 +103,43 @@ async function handleMonitorEvent(body, country) {
 }
 
 /**
- * Extrai dados do cliente do payload direto do monitor.publica.la.
+ * Extrai dados do cliente do payload do monitor.publica.la.
  *
- * O monitor.publica.la pode aninhar os dados do usuário em campos como
- * "user", "subscriber" ou "customer". Tentamos os três em ordem.
- * Se os campos chegarem no nível raiz do body (flat), o fallback final
- * busca body.email / body.name / body.phone diretamente.
+ * Campos confirmados pelo fornecedor:
+ *   user.email | user.name | user.phone (pode ser null)
  */
 function extractCustomerFromMonitor(body, country) {
-  const user = body?.user || body?.subscriber || body?.customer || {};
-  const billing = body?.billing_information || body?.billing || {};
-
-  const email = user?.email || billing?.email || body?.email || '';
-  const name  = user?.name  || billing?.name  || body?.name  || '';
-  const phone = billing?.phone || user?.phone || body?.phone || null;
-
-  if (!email) {
-    console.warn('[MONITOR] E-mail não encontrado no payload. Campos disponíveis:', Object.keys(body).join(', '));
-  }
+  const user = body?.user || {};
 
   return {
-    email,
-    name,
-    phone: normalizePhone(phone, country.phonePrefix),
+    email: user.email || '',
+    name:  user.name  || '',
+    phone: normalizePhone(user.phone || null, country.phonePrefix),
   };
 }
 
 /**
- * Extrai dados da venda do payload direto do monitor.publica.la.
+ * Extrai dados da venda do payload do monitor.publica.la.
+ *
+ * Campos confirmados pelo fornecedor:
+ *   plan.name       → nome do plano
+ *   total_amount    → valor total cobrado em unidade principal (NÃO centavos)
+ *   currency        → "CLP" ou "PEN"
+ *   created_at      → data/hora da assinatura
+ *   coupon          → { code, discount_percentage } ou null
  */
 function extractSaleFromMonitor(body, country) {
-  const plan    = body?.plan    || body?.subscription || {};
-  const payment = body?.payment_details || body?.payment || {};
-
-  const productName  = plan?.name  || body?.plan_name  || body?.product_name || 'Plan';
-  const amountCents  = payment?.payout_amount_in_cents || body?.amount_cents  || 0;
-  const currency     = payment?.payout_currency_id     || body?.currency      || (country.code === 'CL' ? 'CLP' : 'PEN');
-
   return {
-    productName,
-    amount: (amountCents / 100).toFixed(2),
-    currency,
-    gateway: payment?.gateway || body?.gateway || '',
-    method:  payment?.method  || body?.payment_method || '',
-    subtype: 'plan',
+    productName:   body?.plan?.name || 'Plan',
+    amount:        (body?.total_amount ?? 0).toFixed(2),
+    currency:      body?.currency || (country.code === 'CL' ? 'CLP' : 'PEN'),
+    gateway:       '',
+    method:        '',
+    subtype:       'plan',
     recurringCycle: null,
-    date: body?.created_at || new Date().toISOString(),
-    countryCode: country.code,
-    timezone: country.timezone,
+    date:          body?.created_at || new Date().toISOString(),
+    countryCode:   country.code,
+    timezone:      country.timezone,
   };
 }
 
