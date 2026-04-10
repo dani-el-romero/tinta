@@ -137,6 +137,7 @@ function extractSaleFromMonitor(body, country) {
     method:        '',
     subtype:       'plan',
     recurringCycle: null,
+    coupon:        body?.coupon || null, // { code, discount_percentage } ou null
     date:          body?.created_at || new Date().toISOString(),
     countryCode:   country.code,
     timezone:      country.timezone,

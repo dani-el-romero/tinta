@@ -63,7 +63,7 @@ async function getSheetsClient() {
  * @param {string} sheetName - Nome da aba (tab) na planilha
  */
 async function ensureHeader(sheets, sheetName) {
-  const range = `${sheetName}!A1:J1`;
+  const range = `${sheetName}!A1:K1`;
   const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range });
   const rows = res.data.values || [];
 
@@ -84,6 +84,7 @@ async function ensureHeader(sheets, sheetName) {
           'Moeda',
           'Gateway',
           'Método de Pagamento',
+          'Cupón',
         ]],
       },
     });
@@ -114,6 +115,10 @@ async function appendSaleRow(customer, sale, sheetName) {
 
   const timezone = sale.timezone || 'America/Santiago';
 
+  const couponText = sale.coupon
+    ? `${sale.coupon.code} (${sale.coupon.discount_percentage}%)`
+    : '';
+
   const row = [
     new Date(sale.date).toLocaleString('es', { timeZone: timezone }),
     customer.name || '',
@@ -125,11 +130,12 @@ async function appendSaleRow(customer, sale, sheetName) {
     sale.currency || '',
     sale.gateway || '',
     sale.method || '',
+    couponText,
   ];
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:J`,
+    range: `${sheetName}!A:K`,
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [row] },
